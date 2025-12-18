@@ -110,11 +110,9 @@ export function TutorialGuiado({ isAdmin }: TutorialGuiadoProps) {
   const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
-  const [hasCompletedTutorial, setHasCompletedTutorial] = useState(false);
-  const [hasShownThisSession, setHasShownThisSession] = useState(false);
   const overlayRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
-  const hasCheckedRef = useRef(false);
+  const hasInitializedRef = useRef(false);
 
   const steps = isAdmin ? ADMIN_STEPS : USER_STEPS;
   const filteredSteps = steps.filter(step => {
@@ -124,49 +122,45 @@ export function TutorialGuiado({ isAdmin }: TutorialGuiadoProps) {
   });
   const currentStepData = filteredSteps[currentStep];
 
-  // Verificar si ya completó el tutorial (persistente por usuario)
+  // Verificar si debe mostrarse el tutorial (solo UNA VEZ cuando el usuario inicia sesión)
   useEffect(() => {
+    // Solo ejecutar cuando hay un usuario y no se ha inicializado
     if (!user?.id) {
-      setHasCompletedTutorial(false);
+      hasInitializedRef.current = false; // Reset cuando no hay usuario
       return;
     }
     
-    const tutorialKey = `tutorial_completed_${user.id}_${isAdmin ? 'admin' : 'user'}`;
-    const completed = localStorage.getItem(tutorialKey);
-    setHasCompletedTutorial(completed === 'true');
-  }, [user?.id, isAdmin]);
-
-  // Verificar si ya se mostró en esta sesión (solo una vez por sesión de login)
-  useEffect(() => {
-    // No hacer nada si ya verificamos o no hay usuario
-    if (!user?.id || hasCheckedRef.current) return;
+    // Si ya se inicializó para este usuario, no hacer nada
+    if (hasInitializedRef.current) return;
     
-    // Marcar como verificado inmediatamente para evitar múltiples ejecuciones
-    hasCheckedRef.current = true;
+    // Marcar como inicializado INMEDIATAMENTE para evitar múltiples ejecuciones
+    hasInitializedRef.current = true;
     
     // Verificar si ya se mostró en esta sesión
     const sessionKey = `tutorial_shown_session_${user.id}`;
     const shownThisSession = sessionStorage.getItem(sessionKey);
     
+    // Si ya se mostró en esta sesión, NO hacer nada más
     if (shownThisSession === 'true') {
-      setHasShownThisSession(true);
       return;
     }
     
-    // Verificar si ya completó el tutorial
+    // Verificar si ya completó el tutorial (permanente)
     const tutorialKey = `tutorial_completed_${user.id}_${isAdmin ? 'admin' : 'user'}`;
     const completed = localStorage.getItem(tutorialKey);
     
-    // Si no se ha completado Y no se ha mostrado en esta sesión, mostrar
+    // Si NO lo ha completado, mostrarlo UNA VEZ en esta sesión
     if (completed !== 'true') {
       const timer = setTimeout(() => {
-        setIsOpen(true);
-        sessionStorage.setItem(sessionKey, 'true');
-        setHasShownThisSession(true);
+        // Solo abrir si aún no se ha mostrado (doble verificación)
+        const checkAgain = sessionStorage.getItem(sessionKey);
+        if (checkAgain !== 'true') {
+          setIsOpen(true);
+          // Marcar que se mostró en esta sesión
+          sessionStorage.setItem(sessionKey, 'true');
+        }
       }, 1000);
       return () => clearTimeout(timer);
-    } else {
-      setHasCompletedTutorial(true);
     }
   }, [user?.id, isAdmin]);
 
@@ -186,28 +180,40 @@ export function TutorialGuiado({ isAdmin }: TutorialGuiadoProps) {
 
   const handleSkip = () => {
     if (user?.id) {
+      // Marcar que se mostró en esta sesión para que no vuelva a aparecer
       const sessionKey = `tutorial_shown_session_${user.id}`;
       sessionStorage.setItem(sessionKey, 'true');
-      setHasShownThisSession(true);
     }
     setIsOpen(false);
   };
 
   const handleComplete = () => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      setIsOpen(false);
+      return;
+    }
     
+    // Marcar como completado permanentemente
     const tutorialKey = `tutorial_completed_${user.id}_${isAdmin ? 'admin' : 'user'}`;
     localStorage.setItem(tutorialKey, 'true');
-    setHasCompletedTutorial(true);
+    
+    // También marcar que se mostró en esta sesión
+    const sessionKey = `tutorial_shown_session_${user.id}`;
+    sessionStorage.setItem(sessionKey, 'true');
+    
     setIsOpen(false);
   };
 
   const handleRestart = () => {
     if (!user?.id) return;
     
+    // Limpiar ambas marcas para permitir que se muestre de nuevo
     const tutorialKey = `tutorial_completed_${user.id}_${isAdmin ? 'admin' : 'user'}`;
     localStorage.removeItem(tutorialKey);
-    setHasCompletedTutorial(false);
+    
+    const sessionKey = `tutorial_shown_session_${user.id}`;
+    sessionStorage.removeItem(sessionKey);
+    
     setCurrentStep(0);
     setIsOpen(true);
   };
@@ -273,6 +279,15 @@ export function TutorialGuiado({ isAdmin }: TutorialGuiadoProps) {
     tooltipRef.current.style.left = `${left}px`;
     tooltipRef.current.style.transform = '';
   }, [isOpen, currentStep, currentStepData]);
+
+  // Verificar si ha completado el tutorial para mostrar el botón correcto
+  const checkCompletedTutorial = () => {
+    if (!user?.id) return false;
+    const tutorialKey = `tutorial_completed_${user.id}_${isAdmin ? 'admin' : 'user'}`;
+    return localStorage.getItem(tutorialKey) === 'true';
+  };
+
+  const hasCompletedTutorial = checkCompletedTutorial();
 
   if (!isOpen) {
     return (
