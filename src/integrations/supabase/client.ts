@@ -5,6 +5,33 @@ import type { Database } from './types';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
+// Validar que las variables de entorno estén configuradas
+if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+  const missingVars = [];
+  if (!SUPABASE_URL) missingVars.push('VITE_SUPABASE_URL');
+  if (!SUPABASE_PUBLISHABLE_KEY) missingVars.push('VITE_SUPABASE_PUBLISHABLE_KEY');
+  
+  const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+  
+  throw new Error(
+    `❌ Variables de entorno faltantes: ${missingVars.join(', ')}\n\n` +
+    (isProduction 
+      ? `⚙️ PARA PRODUCCIÓN (Vercel):\n` +
+        `1. Ve a Vercel Dashboard > Tu Proyecto > Settings > Environment Variables\n` +
+        `2. Agrega las variables:\n` +
+        `   - VITE_SUPABASE_URL\n` +
+        `   - VITE_SUPABASE_PUBLISHABLE_KEY\n` +
+        `3. Haz REDEPLOY del proyecto\n\n` +
+        `📖 Ver archivo: CONFIGURAR_VERCEL.md para instrucciones detalladas`
+      : `⚙️ PARA DESARROLLO LOCAL:\n` +
+        `1. Crea/verifica .env.local en la raíz del proyecto\n` +
+        `2. Agrega:\n` +
+        `   VITE_SUPABASE_URL=https://tu-proyecto.supabase.co\n` +
+        `   VITE_SUPABASE_PUBLISHABLE_KEY=tu-api-key\n` +
+        `3. REINICIA el servidor (npm run dev)`)
+  );
+}
+
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
