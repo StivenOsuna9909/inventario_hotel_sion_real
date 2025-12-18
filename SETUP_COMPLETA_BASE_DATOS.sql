@@ -1,10 +1,15 @@
 -- ============================================
 -- SETUP COMPLETO DE LA BASE DE DATOS
 -- Ejecuta TODO este script en el SQL Editor de Supabase
+-- Proyecto: yfhmwcbsordywvoyasot
 -- ============================================
 
 -- PASO 1: Crear el tipo enum para roles
-CREATE TYPE public.app_role AS ENUM ('admin', 'user');
+DO $$ BEGIN
+    CREATE TYPE public.app_role AS ENUM ('admin', 'user');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 -- PASO 2: Crear la tabla de productos (si no existe)
 CREATE TABLE IF NOT EXISTS public.products (
@@ -12,6 +17,7 @@ CREATE TABLE IF NOT EXISTS public.products (
   name TEXT NOT NULL,
   description TEXT,
   price DECIMAL(10,2) NOT NULL DEFAULT 0,
+  cost DECIMAL(10,2),
   quantity INTEGER NOT NULL DEFAULT 0,
   category TEXT NOT NULL DEFAULT 'General',
   image_url TEXT,
@@ -29,10 +35,10 @@ ADD COLUMN IF NOT EXISTS sold_quantity_credit INTEGER NOT NULL DEFAULT 0;
 
 -- PASO 4: Actualizar productos existentes para compatibilidad
 UPDATE public.products
-SET initial_quantity = quantity,
-    sold_quantity = 0,
-    sold_quantity_cash = 0,
-    sold_quantity_credit = 0
+SET initial_quantity = COALESCE(initial_quantity, quantity, 0),
+    sold_quantity = COALESCE(sold_quantity, 0),
+    sold_quantity_cash = COALESCE(sold_quantity_cash, 0),
+    sold_quantity_credit = COALESCE(sold_quantity_credit, 0)
 WHERE initial_quantity = 0 AND sold_quantity = 0;
 
 -- PASO 5: Crear tabla de roles de usuario (si no existe)
@@ -154,9 +160,8 @@ BEGIN
 END;
 $$;
 
--- PASO 13: Crear trigger para nuevos usuarios (eliminar si existe primero)
+-- PASO 13: Crear trigger para nuevos usuarios
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
@@ -170,20 +175,23 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SET search_path = public;
 
--- PASO 15: Crear trigger para actualizar timestamp (eliminar si existe primero)
+-- PASO 15: Crear trigger para actualizar updated_at
 DROP TRIGGER IF EXISTS update_products_updated_at ON public.products;
-
 CREATE TRIGGER update_products_updated_at
   BEFORE UPDATE ON public.products
   FOR EACH ROW
   EXECUTE FUNCTION public.update_updated_at_column();
 
 -- ============================================
--- VERIFICACIÓN
+-- ✅ SETUP COMPLETADO
 -- ============================================
--- Ejecuta esto después para verificar que todo se creó correctamente:
--- SELECT column_name, data_type 
--- FROM information_schema.columns 
--- WHERE table_name = 'products' 
--- AND column_name IN ('initial_quantity', 'sold_quantity', 'sold_quantity_cash', 'sold_quantity_credit');
+-- Ahora puedes:
+-- 1. Crear un usuario administrador ejecutando:
+--    INSERT INTO public.user_roles (user_id, role)
+--    VALUES ('TU_USER_ID_AQUI', 'admin');
+--
+-- Para obtener tu USER_ID:
+-- 1. Ve a Authentication > Users en Supabase
+-- 2. Busca tu usuario y copia el UUID
+-- ============================================
 
