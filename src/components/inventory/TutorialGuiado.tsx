@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Badge } from '@/components/ui/badge';
 import { HelpCircle, X, ChevronRight, ChevronLeft, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface TutorialStep {
   id: string;
@@ -106,11 +107,14 @@ const USER_STEPS: TutorialStep[] = [
 ];
 
 export function TutorialGuiado({ isAdmin }: TutorialGuiadoProps) {
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [hasCompletedTutorial, setHasCompletedTutorial] = useState(false);
+  const [hasShownThisSession, setHasShownThisSession] = useState(false);
   const overlayRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const hasCheckedRef = useRef(false);
 
   const steps = isAdmin ? ADMIN_STEPS : USER_STEPS;
   const filteredSteps = steps.filter(step => {
@@ -120,22 +124,51 @@ export function TutorialGuiado({ isAdmin }: TutorialGuiadoProps) {
   });
   const currentStepData = filteredSteps[currentStep];
 
-  // Verificar si ya completó el tutorial
+  // Verificar si ya completó el tutorial (persistente por usuario)
   useEffect(() => {
-    const tutorialKey = isAdmin ? 'tutorial_completed_admin' : 'tutorial_completed_user';
+    if (!user?.id) {
+      setHasCompletedTutorial(false);
+      return;
+    }
+    
+    const tutorialKey = `tutorial_completed_${user.id}_${isAdmin ? 'admin' : 'user'}`;
     const completed = localStorage.getItem(tutorialKey);
     setHasCompletedTutorial(completed === 'true');
-  }, [isAdmin]);
+  }, [user?.id, isAdmin]);
 
-  // Abrir tutorial automáticamente la primera vez
+  // Verificar si ya se mostró en esta sesión (solo una vez por sesión de login)
   useEffect(() => {
-    if (!hasCompletedTutorial && !isOpen) {
+    // No hacer nada si ya verificamos o no hay usuario
+    if (!user?.id || hasCheckedRef.current) return;
+    
+    // Marcar como verificado inmediatamente para evitar múltiples ejecuciones
+    hasCheckedRef.current = true;
+    
+    // Verificar si ya se mostró en esta sesión
+    const sessionKey = `tutorial_shown_session_${user.id}`;
+    const shownThisSession = sessionStorage.getItem(sessionKey);
+    
+    if (shownThisSession === 'true') {
+      setHasShownThisSession(true);
+      return;
+    }
+    
+    // Verificar si ya completó el tutorial
+    const tutorialKey = `tutorial_completed_${user.id}_${isAdmin ? 'admin' : 'user'}`;
+    const completed = localStorage.getItem(tutorialKey);
+    
+    // Si no se ha completado Y no se ha mostrado en esta sesión, mostrar
+    if (completed !== 'true') {
       const timer = setTimeout(() => {
         setIsOpen(true);
+        sessionStorage.setItem(sessionKey, 'true');
+        setHasShownThisSession(true);
       }, 1000);
       return () => clearTimeout(timer);
+    } else {
+      setHasCompletedTutorial(true);
     }
-  }, [hasCompletedTutorial, isOpen]);
+  }, [user?.id, isAdmin]);
 
   const handleNext = () => {
     if (currentStep < filteredSteps.length - 1) {
@@ -152,18 +185,27 @@ export function TutorialGuiado({ isAdmin }: TutorialGuiadoProps) {
   };
 
   const handleSkip = () => {
+    if (user?.id) {
+      const sessionKey = `tutorial_shown_session_${user.id}`;
+      sessionStorage.setItem(sessionKey, 'true');
+      setHasShownThisSession(true);
+    }
     setIsOpen(false);
   };
 
   const handleComplete = () => {
-    const tutorialKey = isAdmin ? 'tutorial_completed_admin' : 'tutorial_completed_user';
+    if (!user?.id) return;
+    
+    const tutorialKey = `tutorial_completed_${user.id}_${isAdmin ? 'admin' : 'user'}`;
     localStorage.setItem(tutorialKey, 'true');
     setHasCompletedTutorial(true);
     setIsOpen(false);
   };
 
   const handleRestart = () => {
-    const tutorialKey = isAdmin ? 'tutorial_completed_admin' : 'tutorial_completed_user';
+    if (!user?.id) return;
+    
+    const tutorialKey = `tutorial_completed_${user.id}_${isAdmin ? 'admin' : 'user'}`;
     localStorage.removeItem(tutorialKey);
     setHasCompletedTutorial(false);
     setCurrentStep(0);
