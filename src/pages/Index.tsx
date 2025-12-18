@@ -79,10 +79,14 @@ const Index = () => {
           description: `${productData.name} se ha agregado al inventario.`,
         });
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Error completo:', error);
+      const errorMessage = error?.message || error?.error_description || 'Error desconocido';
       toast({
         title: "Error",
-        description: "No tienes permisos para realizar esta acción.",
+        description: error?.code === '42501' || error?.message?.includes('permission') || error?.message?.includes('permissions')
+          ? "No tienes permisos para realizar esta acción. Verifica que tengas rol de administrador."
+          : `Error: ${errorMessage}`,
         variant: "destructive",
       });
     }

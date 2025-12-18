@@ -104,6 +104,12 @@ export function useInventory() {
 
     if (error) {
       console.error('Error updating product:', error);
+      console.error('Error details:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
       throw error;
     }
 
