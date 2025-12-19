@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useInventory } from '@/hooks/useInventory';
 import { useAuth } from '@/contexts/AuthContext';
 import { Product } from '@/types/inventory';
+import { supabase } from '@/integrations/supabase/client';
 import { StatsCard } from '@/components/inventory/StatsCard';
 import { ProductCard } from '@/components/inventory/ProductCard';
 import { ProductForm } from '@/components/inventory/ProductForm';
@@ -20,9 +21,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Package, Boxes, DollarSign, AlertTriangle, Plus, LogOut, User, CheckCircle } from 'lucide-react';
+import { Package, Boxes, DollarSign, AlertTriangle, Plus, LogOut, User, CheckCircle, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ShiftSummary } from '@/components/inventory/ShiftSummary';
+import { AdminShiftViewer } from '@/components/inventory/AdminShiftViewer';
 
 const Index = () => {
   const {
@@ -53,6 +55,7 @@ const Index = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
   const [shiftSummaryOpen, setShiftSummaryOpen] = useState(false);
+  const [adminShiftViewerOpen, setAdminShiftViewerOpen] = useState(false);
 
   const handleAddProduct = () => {
     setEditingProduct(null);
@@ -204,28 +207,91 @@ const Index = () => {
     setShiftSummaryOpen(true);
   };
 
-  const handleConfirmFinalizeShift = () => {
-    // Guardar resumen del turno ANTES de limpiar
+  const handleConfirmFinalizeShift = async () => {
+    if (!user?.id) {
+      toast({
+        title: "Error",
+        description: "No se pudo identificar al usuario.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Calcular resumen del turno ANTES de limpiar
+    let totalInitial = 0;
+    let totalSoldCash = 0;
+    let totalSoldCredit = 0;
+    const productsData: Array<{
+      productId: string;
+      productName: string;
+      initialQuantity: number;
+      soldCash: number;
+      soldCredit: number;
+    }> = [];
+
+    allProducts.forEach((product) => {
+      const key = `shift_${product.id}`;
+      const data = localStorage.getItem(key);
+      let shiftData = { initialQuantity: 0, soldCash: 0, soldCredit: 0 };
+      if (data) {
+        try {
+          shiftData = JSON.parse(data);
+        } catch {}
+      }
+
+      totalInitial += shiftData.initialQuantity || 0;
+      totalSoldCash += shiftData.soldCash || 0;
+      totalSoldCredit += shiftData.soldCredit || 0;
+
+      productsData.push({
+        productId: product.id,
+        productName: product.name,
+        initialQuantity: shiftData.initialQuantity || 0,
+        soldCash: shiftData.soldCash || 0,
+        soldCredit: shiftData.soldCredit || 0,
+      });
+    });
+
+    const totalSold = totalSoldCash + totalSoldCredit;
+    const totalAvailable = totalInitial - totalSold;
+
+    // Guardar en la base de datos
+    try {
+      const { error: dbError } = await (supabase as any)
+        .from('shifts')
+        .insert({
+          user_id: user.id,
+          shift_date: new Date().toISOString(),
+          total_initial_quantity: totalInitial,
+          total_sold_cash: totalSoldCash,
+          total_sold_credit: totalSoldCredit,
+          total_sold: totalSold,
+          total_available: totalAvailable,
+          products_data: productsData,
+        });
+
+      if (dbError) {
+        console.error('Error guardando turno en BD:', dbError);
+        toast({
+          title: "Advertencia",
+          description: "El turno se guardó localmente pero hubo un error al guardar en la base de datos.",
+          variant: "default",
+        });
+      }
+    } catch (error) {
+      console.error('Error guardando turno:', error);
+      toast({
+        title: "Advertencia",
+        description: "El turno se guardó localmente pero hubo un error al guardar en la base de datos.",
+        variant: "default",
+      });
+    }
+
+    // Guardar también en localStorage (backup)
     const shiftSummary = {
       date: new Date().toISOString(),
-      products: allProducts.map((product) => {
-        const key = `shift_${product.id}`;
-        const data = localStorage.getItem(key);
-        let shiftData = { initialQuantity: 0, soldCash: 0, soldCredit: 0 };
-        if (data) {
-          try {
-            shiftData = JSON.parse(data);
-          } catch {}
-        }
-        return {
-          productId: product.id,
-          productName: product.name,
-          ...shiftData,
-        };
-      }),
+      products: productsData,
     };
-
-    // Guardar en historial (para futuras referencias)
     const historyKey = `shift_history_${Date.now()}`;
     localStorage.setItem(historyKey, JSON.stringify(shiftSummary));
 
@@ -295,6 +361,16 @@ const Index = () => {
                 <CheckCircle className="h-4 w-4 mr-2" />
                 Finalizar Turno
               </Button>
+              {isAdmin && (
+                <Button 
+                  onClick={() => setAdminShiftViewerOpen(true)} 
+                  variant="outline"
+                  className="border-blue-500 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20"
+                >
+                  <Users className="h-4 w-4 mr-2" />
+                  Ver Turnos
+                </Button>
+              )}
               {isAdmin && (
                 <Button 
                   onClick={handleAddProduct} 
@@ -444,6 +520,14 @@ const Index = () => {
 
       {/* Tutorial Guiado */}
       <TutorialGuiado isAdmin={isAdmin} />
+
+      {/* Admin Shift Viewer */}
+      {isAdmin && (
+        <AdminShiftViewer
+          open={adminShiftViewerOpen}
+          onClose={() => setAdminShiftViewerOpen(false)}
+        />
+      )}
     </div>
   );
 };

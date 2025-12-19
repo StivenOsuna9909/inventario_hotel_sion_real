@@ -1,0 +1,370 @@
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Calendar, DollarSign, CreditCard, Package, Users, TrendingUp, FileText, X } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+
+interface Shift {
+  id: string;
+  user_id: string;
+  shift_date: string;
+  total_initial_quantity: number;
+  total_sold_cash: number;
+  total_sold_credit: number;
+  total_sold: number;
+  total_available: number;
+  products_data: Array<{
+    productId: string;
+    productName: string;
+    initialQuantity: number;
+    soldCash: number;
+    soldCredit: number;
+  }>;
+  created_at: string;
+  user_email?: string;
+}
+
+interface AdminShiftViewerProps {
+  open: boolean;
+  onClose: () => void;
+}
+
+export function AdminShiftViewer({ open, onClose }: AdminShiftViewerProps) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [shifts, setShifts] = useState<Shift[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string>('all');
+  const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
+  const [users, setUsers] = useState<Array<{ id: string; email: string }>>([]);
+
+  // Cargar usuarios desde la tabla profiles
+  useEffect(() => {
+    const fetchUsers = async () => {
+      // Primero obtener los user_ids únicos de los turnos
+      const { data: shiftsData, error: shiftsError } = await (supabase as any)
+        .from('shifts')
+        .select('user_id')
+        .order('shift_date', { ascending: false });
+
+      if (shiftsError) {
+        console.error('Error fetching shifts:', shiftsError);
+        return;
+      }
+
+      const uniqueUserIds = [...new Set((shiftsData || []).map((s: any) => s.user_id))];
+      
+      if (uniqueUserIds.length === 0) {
+        setUsers([]);
+        return;
+      }
+
+      // Obtener emails desde la tabla profiles
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, email')
+        .in('id', uniqueUserIds as string[]);
+
+      if (profilesError) {
+        console.error('Error fetching profiles:', profilesError);
+        // Fallback: usar solo IDs
+        setUsers(uniqueUserIds.map((uid: string) => ({ id: uid, email: uid.substring(0, 8) + '...' })));
+        return;
+      }
+
+      // Crear mapa de usuarios
+      const userMap = new Map((profilesData || []).map((p: any) => [p.id, p.email || 'Usuario sin email']));
+      
+      const userList = uniqueUserIds.map((uid: string) => ({
+        id: uid,
+        email: userMap.get(uid) || `Usuario ${uid.substring(0, 8)}...`
+      }));
+
+      setUsers(userList);
+    };
+
+    if (open) {
+      fetchUsers();
+    }
+  }, [open]);
+
+  // Cargar turnos
+  useEffect(() => {
+    if (!open) return;
+
+    const fetchShifts = async () => {
+      setLoading(true);
+      try {
+        let query = (supabase as any)
+          .from('shifts')
+          .select('*')
+          .order('shift_date', { ascending: false })
+          .limit(100);
+
+        if (selectedUserId !== 'all') {
+          query = query.eq('user_id', selectedUserId);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+          console.error('Error fetching shifts:', error);
+          toast({
+            title: 'Error',
+            description: 'No se pudieron cargar los turnos. Asegúrate de que la tabla "shifts" existe en la base de datos.',
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        // Enriquecer con emails de usuarios
+        const enrichedShifts = (data || []).map((shift: any) => {
+          const userData = users.find(u => u.id === shift.user_id);
+          return {
+            ...shift,
+            user_email: userData?.email || 'Usuario desconocido',
+          } as Shift;
+        });
+
+        setShifts(enrichedShifts);
+      } catch (error) {
+        console.error('Error:', error);
+        toast({
+          title: 'Error',
+          description: 'Error al cargar los turnos.',
+          variant: 'destructive',
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchShifts();
+  }, [open, selectedUserId, users, toast]);
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('es-CO', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onClose}>
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+              <Users className="h-6 w-6" />
+              Resúmenes de Turnos - Administrador
+            </DialogTitle>
+            <DialogDescription>
+              Visualiza los resúmenes de turno de todos los usuarios
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Filtro por usuario */}
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium">Filtrar por usuario:</label>
+              <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                <SelectTrigger className="w-[250px]">
+                  <SelectValue placeholder="Todos los usuarios" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los usuarios</SelectItem>
+                  {users.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Lista de turnos */}
+            {loading ? (
+              <div className="text-center py-8 text-muted-foreground">
+                Cargando turnos...
+              </div>
+            ) : shifts.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                No hay turnos registrados
+              </div>
+            ) : (
+              <ScrollArea className="h-[400px] pr-4">
+                <div className="space-y-3">
+                  {shifts.map((shift) => (
+                    <div
+                      key={shift.id}
+                      className="p-4 bg-muted/50 rounded-lg border border-border hover:bg-muted/70 cursor-pointer transition-colors"
+                      onClick={() => setSelectedShift(shift)}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge variant="outline">{shift.user_email}</Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {formatDate(shift.shift_date)}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                            <div>
+                              <span className="text-muted-foreground">Inicial: </span>
+                              <span className="font-semibold">{shift.total_initial_quantity}</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Vendido: </span>
+                              <span className="font-semibold text-green-600">{shift.total_sold}</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Contado: </span>
+                              <span className="font-semibold text-orange-600">{shift.total_sold_cash}</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Crédito: </span>
+                              <span className="font-semibold text-purple-600">{shift.total_sold_credit}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedShift(shift);
+                          }}
+                        >
+                          Ver Detalles
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button variant="outline" onClick={onClose}>
+              Cerrar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de detalles del turno */}
+      {selectedShift && (
+        <Dialog open={!!selectedShift} onOpenChange={() => setSelectedShift(null)}>
+          <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Detalle del Turno
+              </DialogTitle>
+              <DialogDescription>
+                {selectedShift.user_email} - {formatDate(selectedShift.shift_date)}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              {/* Estadísticas */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
+                  <div className="text-sm text-muted-foreground mb-1">Cantidad Inicial</div>
+                  <div className="text-2xl font-bold">{selectedShift.total_initial_quantity}</div>
+                </div>
+                <div className="p-4 bg-green-50 dark:bg-green-950/20 rounded-lg">
+                  <div className="text-sm text-muted-foreground mb-1">Total Vendido</div>
+                  <div className="text-2xl font-bold text-green-600">{selectedShift.total_sold}</div>
+                </div>
+                <div className="p-4 bg-orange-50 dark:bg-orange-950/20 rounded-lg">
+                  <div className="text-sm text-muted-foreground mb-1">Contado</div>
+                  <div className="text-2xl font-bold text-orange-600">{selectedShift.total_sold_cash}</div>
+                </div>
+                <div className="p-4 bg-purple-50 dark:bg-purple-950/20 rounded-lg">
+                  <div className="text-sm text-muted-foreground mb-1">Crédito</div>
+                  <div className="text-2xl font-bold text-purple-600">{selectedShift.total_sold_credit}</div>
+                </div>
+              </div>
+
+              {/* Detalle de productos */}
+              {selectedShift.products_data && selectedShift.products_data.length > 0 && (
+                <div>
+                  <h3 className="font-semibold mb-3">Detalle por Producto</h3>
+                  <ScrollArea className="h-[300px] pr-4">
+                    <div className="space-y-2">
+                      {selectedShift.products_data.map((product, index) => {
+                        const totalSold = (product.soldCash || 0) + (product.soldCredit || 0);
+                        if (totalSold === 0) return null;
+                        
+                        return (
+                          <div
+                            key={index}
+                            className="p-3 bg-muted/50 rounded-lg border"
+                          >
+                            <div className="font-semibold mb-2">{product.productName}</div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                              <div>
+                                <span className="text-muted-foreground">Inicial: </span>
+                                <span className="font-medium">{product.initialQuantity || 0}</span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Contado: </span>
+                                <span className="font-medium text-orange-600">{product.soldCash || 0}</span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Crédito: </span>
+                                <span className="font-medium text-purple-600">{product.soldCredit || 0}</span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Total: </span>
+                                <span className="font-medium text-green-600">{totalSold}</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-4 border-t">
+              <Button variant="outline" onClick={() => setSelectedShift(null)}>
+                Cerrar
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
+  );
+}
+
