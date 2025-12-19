@@ -24,12 +24,18 @@ interface Shift {
   total_sold_credit: number;
   total_sold: number;
   total_available: number;
+  total_sold_value_cash?: number;
+  total_sold_value_credit?: number;
+  total_sold_value?: number;
   products_data: Array<{
     productId: string;
     productName: string;
+    productPrice?: number;
     initialQuantity: number;
     soldCash: number;
     soldCredit: number;
+    soldValueCash?: number;
+    soldValueCredit?: number;
   }>;
   created_at: string;
   user_email?: string;
@@ -233,7 +239,7 @@ export function AdminShiftViewer({ open, onClose }: AdminShiftViewerProps) {
                               {formatDate(shift.shift_date)}
                             </span>
                           </div>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm mb-2">
                             <div>
                               <span className="text-muted-foreground">Inicial: </span>
                               <span className="font-semibold">{shift.total_initial_quantity}</span>
@@ -251,6 +257,27 @@ export function AdminShiftViewer({ open, onClose }: AdminShiftViewerProps) {
                               <span className="font-semibold text-purple-600">{shift.total_sold_credit}</span>
                             </div>
                           </div>
+                          {shift.total_sold_value && (
+                            <div className="flex items-center gap-4 text-sm">
+                              <div className="flex items-center gap-1">
+                                <DollarSign className="h-4 w-4 text-green-600" />
+                                <span className="text-muted-foreground">Total Vendido: </span>
+                                <span className="font-bold text-green-600">{formatCurrency(shift.total_sold_value)}</span>
+                              </div>
+                              {shift.total_sold_value_cash !== undefined && shift.total_sold_value_cash > 0 && (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-muted-foreground">Contado: </span>
+                                  <span className="font-semibold text-orange-600">{formatCurrency(shift.total_sold_value_cash)}</span>
+                                </div>
+                              )}
+                              {shift.total_sold_value_credit !== undefined && shift.total_sold_value_credit > 0 && (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-muted-foreground">Crédito: </span>
+                                  <span className="font-semibold text-purple-600">{formatCurrency(shift.total_sold_value_credit)}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                         <Button
                           variant="ghost"
@@ -293,25 +320,56 @@ export function AdminShiftViewer({ open, onClose }: AdminShiftViewerProps) {
             </DialogHeader>
 
             <div className="space-y-4">
-              {/* Estadísticas */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
-                  <div className="text-sm text-muted-foreground mb-1">Cantidad Inicial</div>
-                  <div className="text-2xl font-bold">{selectedShift.total_initial_quantity}</div>
-                </div>
-                <div className="p-4 bg-green-50 dark:bg-green-950/20 rounded-lg">
-                  <div className="text-sm text-muted-foreground mb-1">Total Vendido</div>
-                  <div className="text-2xl font-bold text-green-600">{selectedShift.total_sold}</div>
-                </div>
-                <div className="p-4 bg-orange-50 dark:bg-orange-950/20 rounded-lg">
-                  <div className="text-sm text-muted-foreground mb-1">Contado</div>
-                  <div className="text-2xl font-bold text-orange-600">{selectedShift.total_sold_cash}</div>
-                </div>
-                <div className="p-4 bg-purple-50 dark:bg-purple-950/20 rounded-lg">
-                  <div className="text-sm text-muted-foreground mb-1">Crédito</div>
-                  <div className="text-2xl font-bold text-purple-600">{selectedShift.total_sold_credit}</div>
+              {/* Estadísticas de Cantidades */}
+              <div>
+                <h3 className="text-sm font-semibold mb-2 text-muted-foreground">CANTIDADES</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
+                    <div className="text-sm text-muted-foreground mb-1">Cantidad Inicial</div>
+                    <div className="text-2xl font-bold">{selectedShift.total_initial_quantity}</div>
+                  </div>
+                  <div className="p-4 bg-green-50 dark:bg-green-950/20 rounded-lg">
+                    <div className="text-sm text-muted-foreground mb-1">Total Vendido</div>
+                    <div className="text-2xl font-bold text-green-600">{selectedShift.total_sold}</div>
+                  </div>
+                  <div className="p-4 bg-orange-50 dark:bg-orange-950/20 rounded-lg">
+                    <div className="text-sm text-muted-foreground mb-1">Contado</div>
+                    <div className="text-2xl font-bold text-orange-600">{selectedShift.total_sold_cash}</div>
+                  </div>
+                  <div className="p-4 bg-purple-50 dark:bg-purple-950/20 rounded-lg">
+                    <div className="text-sm text-muted-foreground mb-1">Crédito</div>
+                    <div className="text-2xl font-bold text-purple-600">{selectedShift.total_sold_credit}</div>
+                  </div>
                 </div>
               </div>
+
+              {/* Estadísticas de Dinero */}
+              {selectedShift.total_sold_value !== undefined && selectedShift.total_sold_value > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold mb-2 text-muted-foreground flex items-center gap-2">
+                    <DollarSign className="h-4 w-4" />
+                    DINERO VENDIDO
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border-2 border-green-500">
+                      <div className="text-sm text-muted-foreground mb-1">Total Vendido</div>
+                      <div className="text-2xl font-bold text-green-600">{formatCurrency(selectedShift.total_sold_value)}</div>
+                    </div>
+                    {selectedShift.total_sold_value_cash !== undefined && selectedShift.total_sold_value_cash > 0 && (
+                      <div className="p-4 bg-orange-50 dark:bg-orange-950/20 rounded-lg border-2 border-orange-500">
+                        <div className="text-sm text-muted-foreground mb-1">Contado</div>
+                        <div className="text-2xl font-bold text-orange-600">{formatCurrency(selectedShift.total_sold_value_cash)}</div>
+                      </div>
+                    )}
+                    {selectedShift.total_sold_value_credit !== undefined && selectedShift.total_sold_value_credit > 0 && (
+                      <div className="p-4 bg-purple-50 dark:bg-purple-950/20 rounded-lg border-2 border-purple-500">
+                        <div className="text-sm text-muted-foreground mb-1">Crédito</div>
+                        <div className="text-2xl font-bold text-purple-600">{formatCurrency(selectedShift.total_sold_value_credit)}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Detalle de productos */}
               {selectedShift.products_data && selectedShift.products_data.length > 0 && (
@@ -328,8 +386,13 @@ export function AdminShiftViewer({ open, onClose }: AdminShiftViewerProps) {
                             key={index}
                             className="p-3 bg-muted/50 rounded-lg border"
                           >
-                            <div className="font-semibold mb-2">{product.productName}</div>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                            <div className="font-semibold mb-2 flex items-center justify-between">
+                              <span>{product.productName}</span>
+                              {product.productPrice && (
+                                <span className="text-xs text-muted-foreground">Precio: {formatCurrency(product.productPrice)}</span>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm mb-2">
                               <div>
                                 <span className="text-muted-foreground">Inicial: </span>
                                 <span className="font-medium">{product.initialQuantity || 0}</span>
@@ -347,6 +410,29 @@ export function AdminShiftViewer({ open, onClose }: AdminShiftViewerProps) {
                                 <span className="font-medium text-green-600">{totalSold}</span>
                               </div>
                             </div>
+                            {(product.soldValueCash !== undefined || product.soldValueCredit !== undefined) && (
+                              <div className="flex items-center gap-4 text-sm pt-2 border-t border-border/50">
+                                {product.soldValueCash !== undefined && product.soldValueCash > 0 && (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-muted-foreground">Contado: </span>
+                                    <span className="font-semibold text-orange-600">{formatCurrency(product.soldValueCash)}</span>
+                                  </div>
+                                )}
+                                {product.soldValueCredit !== undefined && product.soldValueCredit > 0 && (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-muted-foreground">Crédito: </span>
+                                    <span className="font-semibold text-purple-600">{formatCurrency(product.soldValueCredit)}</span>
+                                  </div>
+                                )}
+                                {(product.soldValueCash || 0) + (product.soldValueCredit || 0) > 0 && (
+                                  <div className="flex items-center gap-1 ml-auto">
+                                    <DollarSign className="h-4 w-4 text-green-600" />
+                                    <span className="text-muted-foreground">Total: </span>
+                                    <span className="font-bold text-green-600">{formatCurrency((product.soldValueCash || 0) + (product.soldValueCredit || 0))}</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         );
                       })}

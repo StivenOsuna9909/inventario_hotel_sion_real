@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS public.shifts (
   total_sold_credit INTEGER NOT NULL DEFAULT 0,
   total_sold INTEGER NOT NULL DEFAULT 0,
   total_available INTEGER NOT NULL DEFAULT 0,
+  total_sold_value_cash DECIMAL(10,2) NOT NULL DEFAULT 0,
+  total_sold_value_credit DECIMAL(10,2) NOT NULL DEFAULT 0,
+  total_sold_value DECIMAL(10,2) NOT NULL DEFAULT 0,
   products_data JSONB NOT NULL DEFAULT '[]'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );

@@ -221,12 +221,17 @@ const Index = () => {
     let totalInitial = 0;
     let totalSoldCash = 0;
     let totalSoldCredit = 0;
+    let totalSoldValueCash = 0;
+    let totalSoldValueCredit = 0;
     const productsData: Array<{
       productId: string;
       productName: string;
+      productPrice: number;
       initialQuantity: number;
       soldCash: number;
       soldCredit: number;
+      soldValueCash: number;
+      soldValueCredit: number;
     }> = [];
 
     allProducts.forEach((product) => {
@@ -239,20 +244,32 @@ const Index = () => {
         } catch {}
       }
 
+      const soldCash = shiftData.soldCash || 0;
+      const soldCredit = shiftData.soldCredit || 0;
+      const productPrice = product.price || 0;
+      const soldValueCash = soldCash * productPrice;
+      const soldValueCredit = soldCredit * productPrice;
+
       totalInitial += shiftData.initialQuantity || 0;
-      totalSoldCash += shiftData.soldCash || 0;
-      totalSoldCredit += shiftData.soldCredit || 0;
+      totalSoldCash += soldCash;
+      totalSoldCredit += soldCredit;
+      totalSoldValueCash += soldValueCash;
+      totalSoldValueCredit += soldValueCredit;
 
       productsData.push({
         productId: product.id,
         productName: product.name,
+        productPrice: productPrice,
         initialQuantity: shiftData.initialQuantity || 0,
-        soldCash: shiftData.soldCash || 0,
-        soldCredit: shiftData.soldCredit || 0,
+        soldCash: soldCash,
+        soldCredit: soldCredit,
+        soldValueCash: soldValueCash,
+        soldValueCredit: soldValueCredit,
       });
     });
 
     const totalSold = totalSoldCash + totalSoldCredit;
+    const totalSoldValue = totalSoldValueCash + totalSoldValueCredit;
     const totalAvailable = totalInitial - totalSold;
 
     // Guardar en la base de datos
@@ -267,6 +284,9 @@ const Index = () => {
           total_sold_credit: totalSoldCredit,
           total_sold: totalSold,
           total_available: totalAvailable,
+          total_sold_value_cash: totalSoldValueCash,
+          total_sold_value_credit: totalSoldValueCredit,
+          total_sold_value: totalSoldValue,
           products_data: productsData,
         });
 
