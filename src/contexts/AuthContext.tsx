@@ -37,6 +37,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    // Procesar tokens de autenticación desde la URL (cuando viene del email)
+    const handleAuthHash = async () => {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
+      
+      if (accessToken && refreshToken) {
+        // Limpiar el hash de la URL
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        
+        // Establecer la sesión manualmente
+        const { data, error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        
+        if (!error && data.session) {
+          // La sesión se establecerá automáticamente a través de onAuthStateChange
+        }
+      }
+    };
+
+    handleAuthHash();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setSession(session);
