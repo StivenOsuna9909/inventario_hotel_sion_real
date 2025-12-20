@@ -72,13 +72,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = async (email: string, password: string) => {
     const redirectUrl = `${window.location.origin}/`;
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: redirectUrl,
       },
     });
+    
+    // Si hay sesión después del signUp, retornar sin error
+    if (data.session && !error) {
+      return { error: null };
+    }
+    
+    // Si no hay error pero tampoco hay sesión, puede ser que requiera confirmación de email
+    // En ese caso, retornamos sin error pero sin sesión (el componente manejará esto)
+    if (!error && !data.session) {
+      return { error: null };
+    }
+    
     return { error };
   };
 

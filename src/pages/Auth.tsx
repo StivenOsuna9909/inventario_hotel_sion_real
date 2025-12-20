@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,6 +14,7 @@ const Auth = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('login');
   const { signIn, signUp, user, loading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -65,12 +67,23 @@ const Auth = () => {
     const { error } = await signUp(email, password);
 
     if (error) {
-      if (error.message.includes('already registered')) {
+      // Si el error indica que el usuario ya existe, sugiere iniciar sesión
+      if (error.message.includes('already registered') || error.message.includes('already registered') || error.message.includes('User already registered')) {
         toast({
           title: 'Usuario ya registrado',
           description: 'Este email ya está registrado. Intenta iniciar sesión.',
           variant: 'destructive',
         });
+        // Cambiar a la pestaña de login
+        setActiveTab('login');
+      } else if (error.message.includes('Email not confirmed') || error.message.includes('email not confirmed')) {
+        toast({
+          title: 'Confirma tu email',
+          description: 'Por favor revisa tu correo y confirma tu cuenta antes de iniciar sesión.',
+          variant: 'default',
+        });
+        // Cambiar a la pestaña de login
+        setActiveTab('login');
       } else {
         toast({
           title: 'Error al registrarse',
@@ -79,11 +92,40 @@ const Auth = () => {
         });
       }
     } else {
-      toast({
-        title: 'Cuenta creada',
-        description: 'Tu cuenta ha sido creada. Ya puedes acceder al inventario.',
-      });
-      navigate('/');
+      // Esperar un momento para que se actualice la sesión
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Verificar si hay usuario/sesión después del registro
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        toast({
+          title: 'Cuenta creada',
+          description: 'Tu cuenta ha sido creada. Ya puedes acceder al inventario.',
+        });
+        navigate('/');
+      } else {
+        // No hay sesión automática, intentar iniciar sesión con las mismas credenciales
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        
+        if (!signInError) {
+          // Login exitoso después del registro
+          toast({
+            title: 'Cuenta creada',
+            description: 'Tu cuenta ha sido creada. Ya puedes acceder al inventario.',
+          });
+          navigate('/');
+        } else {
+          // No se pudo iniciar sesión, probablemente requiere confirmación de email
+          toast({
+            title: 'Cuenta creada',
+            description: 'Revisa tu correo para confirmar tu cuenta, luego inicia sesión.',
+            variant: 'default',
+          });
+          // Cambiar a la pestaña de login
+          setActiveTab('login');
+        }
+      }
     }
 
     setIsLoading(false);
@@ -112,7 +154,7 @@ const Auth = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="login" className="w-full">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-2 mb-6">
               <TabsTrigger value="login">Iniciar Sesión</TabsTrigger>
               <TabsTrigger value="register">Registrarse</TabsTrigger>
