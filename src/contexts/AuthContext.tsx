@@ -71,12 +71,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signUp = async (email: string, password: string) => {
-    // Usar variable de entorno o detectar el dominio correcto
-    const appUrl = import.meta.env.VITE_APP_URL || 
-      (window.location.hostname.includes('vercel.app') 
-        ? 'https://inventario-hotel-sion-real.vercel.app' 
-        : window.location.origin);
-    const redirectUrl = `${appUrl}/`;
+    // Siempre usar el dominio de producción para los emails de confirmación
+    const redirectUrl = 'https://inventario-hotel-sion-real.vercel.app/';
     
     const { data, error } = await supabase.auth.signUp({
       email,
