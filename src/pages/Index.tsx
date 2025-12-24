@@ -274,7 +274,21 @@ const Index = () => {
 
     // Guardar en la base de datos
     try {
-      const { error: dbError } = await (supabase as any)
+      console.log('Intentando guardar turno para usuario:', user.id);
+      console.log('Datos del turno:', {
+        user_id: user.id,
+        total_initial_quantity: totalInitial,
+        total_sold_cash: totalSoldCash,
+        total_sold_credit: totalSoldCredit,
+        total_sold: totalSold,
+        total_available: totalAvailable,
+        total_sold_value_cash: totalSoldValueCash,
+        total_sold_value_credit: totalSoldValueCredit,
+        total_sold_value: totalSoldValue,
+        products_data_length: productsData.length,
+      });
+
+      const { data: insertData, error: dbError } = await (supabase as any)
         .from('shifts')
         .insert({
           user_id: user.id,
@@ -288,29 +302,57 @@ const Index = () => {
           total_sold_value_credit: totalSoldValueCredit,
           total_sold_value: totalSoldValue,
           products_data: productsData,
-        });
+        })
+        .select();
 
       if (dbError) {
-        console.error('Error guardando turno en BD:', dbError);
-        toast({
-          title: "Advertencia",
-          description: "El turno se guardó localmente pero hubo un error al guardar en la base de datos.",
-          variant: "default",
+        console.error('❌ Error guardando turno en BD:', dbError);
+        console.error('Detalles del error:', {
+          message: dbError.message,
+          details: dbError.details,
+          hint: dbError.hint,
+          code: dbError.code,
         });
+        toast({
+          title: "Error al guardar turno",
+          description: `No se pudo guardar el turno en la base de datos: ${dbError.message || 'Error desconocido'}. Verifica la consola para más detalles.`,
+          variant: "destructive",
+        });
+        // NO continuar si hay error - el usuario debe saber que no se guardó
+        return;
       }
-    } catch (error) {
-      console.error('Error guardando turno:', error);
+
+      console.log('✅ Turno guardado correctamente:', insertData);
       toast({
-        title: "Advertencia",
-        description: "El turno se guardó localmente pero hubo un error al guardar en la base de datos.",
-        variant: "default",
+        title: "Turno finalizado",
+        description: "El resumen del turno ha sido guardado correctamente en la base de datos.",
       });
+    } catch (error: any) {
+      console.error('❌ Excepción al guardar turno:', error);
+      console.error('Stack trace:', error.stack);
+      toast({
+        title: "Error crítico",
+        description: `Error inesperado al guardar el turno: ${error.message || 'Error desconocido'}. Verifica la consola para más detalles.`,
+        variant: "destructive",
+      });
+      // NO continuar si hay error
+      return;
     }
 
     // Guardar también en localStorage (backup)
     const shiftSummary = {
       date: new Date().toISOString(),
       products: productsData,
+      totals: {
+        totalInitial,
+        totalSoldCash,
+        totalSoldCredit,
+        totalSold,
+        totalAvailable,
+        totalSoldValueCash,
+        totalSoldValueCredit,
+        totalSoldValue,
+      },
     };
     const historyKey = `shift_history_${Date.now()}`;
     localStorage.setItem(historyKey, JSON.stringify(shiftSummary));
@@ -322,10 +364,6 @@ const Index = () => {
     });
 
     setShiftSummaryOpen(false);
-    toast({
-      title: "Turno finalizado",
-      description: "El resumen del turno ha sido guardado correctamente.",
-    });
 
     // Recargar productos para actualizar la UI
     window.location.reload();

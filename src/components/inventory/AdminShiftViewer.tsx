@@ -12,8 +12,9 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar, DollarSign, CreditCard, Package, Users, TrendingUp, FileText, X } from 'lucide-react';
+import { Calendar, DollarSign, CreditCard, Package, Users, TrendingUp, FileText, X, Pencil, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { Input } from '@/components/ui/input';
 
 interface Shift {
   id: string;
@@ -39,6 +40,7 @@ interface Shift {
   }>;
   created_at: string;
   user_email?: string;
+  user_email_original?: string; // Email original sin personalización
 }
 
 interface AdminShiftViewerProps {
@@ -54,6 +56,21 @@ export function AdminShiftViewer({ open, onClose }: AdminShiftViewerProps) {
   const [selectedUserId, setSelectedUserId] = useState<string>('all');
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
   const [users, setUsers] = useState<Array<{ id: string; email: string }>>([]);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState<string>('');
+  const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
+
+  // Cargar nombres personalizados desde localStorage
+  useEffect(() => {
+    const savedNames = localStorage.getItem('admin_user_display_names');
+    if (savedNames) {
+      try {
+        setDisplayNames(JSON.parse(savedNames));
+      } catch (e) {
+        console.error('Error loading display names:', e);
+      }
+    }
+  }, []);
 
   // Cargar usuarios desde la tabla profiles
   useEffect(() => {
@@ -134,12 +151,14 @@ export function AdminShiftViewer({ open, onClose }: AdminShiftViewerProps) {
           return;
         }
 
-        // Enriquecer con emails de usuarios
+        // Enriquecer con emails de usuarios (mantener email original)
         const enrichedShifts = (data || []).map((shift: any) => {
           const userData = users.find(u => u.id === shift.user_id);
+          const defaultEmail = userData?.email || 'Usuario desconocido';
           return {
             ...shift,
-            user_email: userData?.email || 'Usuario desconocido',
+            user_email: defaultEmail,
+            user_email_original: defaultEmail,
           } as Shift;
         });
 
@@ -180,6 +199,58 @@ export function AdminShiftViewer({ open, onClose }: AdminShiftViewerProps) {
     });
   };
 
+  // Obtener nombre de visualización (personalizado o email por defecto)
+  const getDisplayName = (userId: string, defaultEmail: string): string => {
+    return displayNames[userId] || defaultEmail;
+  };
+
+  // Guardar nombre personalizado
+  const saveDisplayName = (userId: string, name: string) => {
+    const trimmedName = name.trim();
+    if (!trimmedName) return; // No guardar nombres vacíos
+
+    const newDisplayNames = { ...displayNames, [userId]: trimmedName };
+    setDisplayNames(newDisplayNames);
+    localStorage.setItem('admin_user_display_names', JSON.stringify(newDisplayNames));
+  };
+
+  // Iniciar edición
+  const startEditing = (userId: string, currentName: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevenir que se abra el diálogo de detalles
+    setEditingUserId(userId);
+    setEditingName(currentName);
+  };
+
+  // Guardar edición
+  const saveEdit = (userId: string, e?: React.MouseEvent | React.KeyboardEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    if (editingName.trim()) {
+      saveDisplayName(userId, editingName.trim());
+    }
+    setEditingUserId(null);
+    setEditingName('');
+  };
+
+  // Cancelar edición
+  const cancelEdit = (e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    setEditingUserId(null);
+    setEditingName('');
+  };
+
+  // Manejar tecla Enter para guardar
+  const handleKeyDown = (userId: string, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      saveEdit(userId, e);
+    } else if (e.key === 'Escape') {
+      cancelEdit();
+    }
+  };
+
   return (
     <>
       <Dialog open={open} onOpenChange={onClose}>
@@ -206,7 +277,7 @@ export function AdminShiftViewer({ open, onClose }: AdminShiftViewerProps) {
                   <SelectItem value="all">Todos los usuarios</SelectItem>
                   {users.map((u) => (
                     <SelectItem key={u.id} value={u.id}>
-                      {u.email}
+                      {getDisplayName(u.id, u.email)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -234,7 +305,49 @@ export function AdminShiftViewer({ open, onClose }: AdminShiftViewerProps) {
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
-                            <Badge variant="outline">{shift.user_email}</Badge>
+                            <div className="flex items-center gap-1.5 group">
+                              {editingUserId === shift.user_id ? (
+                                <div className="flex items-center gap-1">
+                                  <Input
+                                    value={editingName}
+                                    onChange={(e) => setEditingName(e.target.value)}
+                                    onKeyDown={(e) => handleKeyDown(shift.user_id, e)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="h-7 w-32 text-xs"
+                                    autoFocus
+                                  />
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0"
+                                    onClick={(e) => saveEdit(shift.user_id, e)}
+                                  >
+                                    <Check className="h-3.5 w-3.5 text-green-600" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0"
+                                    onClick={(e) => cancelEdit(e)}
+                                  >
+                                    <X className="h-3.5 w-3.5 text-red-600" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <>
+                                  <Badge variant="outline" className="cursor-default">
+                                    {getDisplayName(shift.user_id, shift.user_email_original || shift.user_email || 'Usuario desconocido')}
+                                  </Badge>
+                                  <button
+                                    onClick={(e) => startEditing(shift.user_id, getDisplayName(shift.user_id, shift.user_email_original || shift.user_email || 'Usuario desconocido'), e)}
+                                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-muted rounded"
+                                    title="Editar nombre"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5 text-muted-foreground hover:text-primary" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
                             <span className="text-xs text-muted-foreground">
                               {formatDate(shift.shift_date)}
                             </span>
@@ -315,7 +428,7 @@ export function AdminShiftViewer({ open, onClose }: AdminShiftViewerProps) {
                 Detalle del Turno
               </DialogTitle>
               <DialogDescription>
-                {selectedShift.user_email} - {formatDate(selectedShift.shift_date)}
+                {getDisplayName(selectedShift.user_id, selectedShift.user_email_original || selectedShift.user_email || 'Usuario desconocido')} - {formatDate(selectedShift.shift_date)}
               </DialogDescription>
             </DialogHeader>
 
