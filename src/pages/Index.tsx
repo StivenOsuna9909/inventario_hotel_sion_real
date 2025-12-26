@@ -232,15 +232,29 @@ const Index = () => {
       soldCredit: number;
       soldValueCash: number;
       soldValueCredit: number;
+      creditSales?: Array<{ quantity: number; roomNumber: string }>;
     }> = [];
 
     allProducts.forEach((product) => {
       const key = `shift_${product.id}`;
       const data = localStorage.getItem(key);
-      let shiftData = { initialQuantity: 0, soldCash: 0, soldCredit: 0 };
+      let shiftData: {
+        initialQuantity: number;
+        soldCash: number;
+        soldCredit: number;
+        creditSales?: Array<{ quantity: number; roomNumber: string }>;
+      } = { initialQuantity: 0, soldCash: 0, soldCredit: 0, creditSales: [] };
       if (data) {
         try {
           shiftData = JSON.parse(data);
+          // Asegurar que creditSales existe y calcular soldCredit si es necesario
+          if (!shiftData.creditSales) {
+            shiftData.creditSales = [];
+          }
+          // Si hay creditSales, calcular soldCredit desde ahí
+          if (shiftData.creditSales && Array.isArray(shiftData.creditSales) && shiftData.creditSales.length > 0) {
+            shiftData.soldCredit = shiftData.creditSales.reduce((sum, sale) => sum + (sale.quantity || 0), 0);
+          }
         } catch {}
       }
 
@@ -265,6 +279,7 @@ const Index = () => {
         soldCredit: soldCredit,
         soldValueCash: soldValueCash,
         soldValueCredit: soldValueCredit,
+        creditSales: shiftData.creditSales || [],
       });
     });
 

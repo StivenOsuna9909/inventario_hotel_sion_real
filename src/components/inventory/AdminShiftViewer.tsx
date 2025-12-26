@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar, DollarSign, CreditCard, Package, Users, TrendingUp, FileText, X, Pencil, Check } from 'lucide-react';
+import { Calendar, DollarSign, CreditCard, Package, Users, TrendingUp, FileText, X, Pencil, Check, Home } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 
@@ -37,6 +37,7 @@ interface Shift {
     soldCredit: number;
     soldValueCash?: number;
     soldValueCredit?: number;
+    creditSales?: Array<{ quantity: number; roomNumber: string }>;
   }>;
   created_at: string;
   user_email?: string;
@@ -518,6 +519,21 @@ export function AdminShiftViewer({ open, onClose }: AdminShiftViewerProps) {
                                 <span className="text-muted-foreground">Crédito: </span>
                                 <span className="font-medium text-purple-600">{product.soldCredit || 0}</span>
                               </div>
+                              {product.creditSales && product.creditSales.length > 0 && (
+                                <div className="col-span-2 md:col-span-4 mt-2 pt-2 border-t border-border/50">
+                                  <div className="flex flex-wrap gap-2">
+                                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                      <Home className="h-3 w-3" />
+                                      Habitaciones:
+                                    </span>
+                                    {product.creditSales.map((sale, idx) => (
+                                      <Badge key={idx} variant="outline" className="text-xs">
+                                        Hab. {sale.roomNumber}: {sale.quantity} und.
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                               <div>
                                 <span className="text-muted-foreground">Total: </span>
                                 <span className="font-medium text-green-600">{totalSold}</span>

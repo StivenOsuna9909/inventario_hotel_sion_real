@@ -40,6 +40,7 @@ export function ProductCard({
   const [initialQuantityInput, setInitialQuantityInput] = useState((product.initialQuantity ?? 0).toString());
   const [saleQuantityInput, setSaleQuantityInput] = useState('0');
   const [saleType, setSaleType] = useState<'cash' | 'credit'>('cash');
+  const [roomNumberInput, setRoomNumberInput] = useState('');
 
   // Get shift data from localStorage
   const getShiftData = () => {
@@ -47,12 +48,24 @@ export function ProductCard({
     const data = localStorage.getItem(key);
     if (data) {
       try {
-        return JSON.parse(data);
+        const parsed = JSON.parse(data);
+        // Migrar estructura antigua a nueva si es necesario
+        if (!parsed.creditSales) {
+          parsed.creditSales = [];
+        }
+        // Calcular soldCredit desde creditSales si hay ventas a crédito detalladas
+        if (parsed.creditSales && Array.isArray(parsed.creditSales) && parsed.creditSales.length > 0) {
+          parsed.soldCredit = parsed.creditSales.reduce((sum: number, sale: { quantity: number }) => sum + (sale.quantity || 0), 0);
+        } else {
+          // Mantener soldCredit existente si no hay creditSales (estructura antigua)
+          parsed.soldCredit = parsed.soldCredit || 0;
+        }
+        return parsed;
       } catch {
-        return { initialQuantity: product.quantity, soldCash: 0, soldCredit: 0 };
+        return { initialQuantity: product.quantity, soldCash: 0, soldCredit: 0, creditSales: [] };
       }
     }
-    return { initialQuantity: product.quantity, soldCash: 0, soldCredit: 0 };
+    return { initialQuantity: product.quantity, soldCash: 0, soldCredit: 0, creditSales: [] };
   };
 
   const [shiftData, setShiftData] = useState(getShiftData());
@@ -72,7 +85,7 @@ export function ProductCard({
     if (qty >= 0) {
       // Save to localStorage
       const key = `shift_${product.id}`;
-      const newData = { initialQuantity: qty, soldCash: 0, soldCredit: 0 };
+      const newData = { initialQuantity: qty, soldCash: 0, soldCredit: 0, creditSales: [] };
       localStorage.setItem(key, JSON.stringify(newData));
       setShiftData(newData);
       
@@ -87,14 +100,32 @@ export function ProductCard({
   const handleRecordSale = () => {
     const qty = parseInt(saleQuantityInput) || 0;
     if (qty > 0 && qty <= availableQuantity) {
+      // Validar número de habitación si es crédito
+      if (saleType === 'credit' && !roomNumberInput.trim()) {
+        return; // No permitir venta a crédito sin número de habitación
+      }
+
       // Update localStorage
       const key = `shift_${product.id}`;
       const newData = { ...shiftData };
+      
+      // Asegurar que creditSales existe
+      if (!newData.creditSales) {
+        newData.creditSales = [];
+      }
+      
       if (saleType === 'cash') {
         newData.soldCash = (newData.soldCash || 0) + qty;
       } else {
-        newData.soldCredit = (newData.soldCredit || 0) + qty;
+        // Agregar venta a crédito con número de habitación
+        newData.creditSales = [...(newData.creditSales || []), {
+          quantity: qty,
+          roomNumber: roomNumberInput.trim()
+        }];
+        // Calcular total de crédito
+        newData.soldCredit = newData.creditSales.reduce((sum: number, sale: { quantity: number }) => sum + (sale.quantity || 0), 0);
       }
+      
       localStorage.setItem(key, JSON.stringify(newData));
       setShiftData(newData);
       
@@ -104,6 +135,7 @@ export function ProductCard({
       }
       setSaleQuantityInput('0');
       setSaleType('cash');
+      setRoomNumberInput('');
       setSaleDialogOpen(false);
     }
   };
@@ -251,6 +283,7 @@ export function ProductCard({
               onClick={() => {
                 setSaleQuantityInput('0');
                 setSaleType('cash');
+                setRoomNumberInput('');
                 setSaleDialogOpen(true);
               }}
               disabled={availableQuantity <= 0}
@@ -361,6 +394,19 @@ export function ProductCard({
                 </Button>
               </div>
             </div>
+            {saleType === 'credit' && (
+              <div className="space-y-2">
+                <Label htmlFor="roomNumber">Número de habitación</Label>
+                <Input
+                  id="roomNumber"
+                  type="text"
+                  value={roomNumberInput}
+                  onChange={(e) => setRoomNumberInput(e.target.value)}
+                  placeholder="Ej: 101, 205, etc."
+                  className="w-full"
+                />
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSaleDialogOpen(false)}>
@@ -368,7 +414,12 @@ export function ProductCard({
             </Button>
             <Button 
               onClick={handleRecordSale}
-              disabled={!saleQuantityInput || parseInt(saleQuantityInput) <= 0 || parseInt(saleQuantityInput) > availableQuantity}
+              disabled={
+                !saleQuantityInput || 
+                parseInt(saleQuantityInput) <= 0 || 
+                parseInt(saleQuantityInput) > availableQuantity ||
+                (saleType === 'credit' && !roomNumberInput.trim())
+              }
             >
               Registrar
             </Button>
