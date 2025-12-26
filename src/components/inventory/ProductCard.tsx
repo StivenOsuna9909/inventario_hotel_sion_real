@@ -386,7 +386,9 @@ export function ProductCard({
                 <Button
                   type="button"
                   variant={saleType === 'credit' ? 'default' : 'outline'}
-                  onClick={() => setSaleType('credit')}
+                  onClick={() => {
+                    setSaleType('credit');
+                  }}
                   className="flex-1"
                 >
                   <CreditCard className="h-4 w-4 mr-2" />
@@ -394,7 +396,7 @@ export function ProductCard({
                 </Button>
               </div>
             </div>
-            {saleType === 'credit' && (
+            {saleType === 'credit' ? (
               <div className="space-y-2">
                 <Label htmlFor="roomNumber">Número de habitación</Label>
                 <Input
@@ -406,7 +408,7 @@ export function ProductCard({
                   className="w-full"
                 />
               </div>
-            )}
+            ) : null}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSaleDialogOpen(false)}>
