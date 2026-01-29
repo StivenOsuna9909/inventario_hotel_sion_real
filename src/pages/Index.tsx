@@ -287,6 +287,7 @@ const Index = () => {
     const totalSoldValue = totalSoldValueCash + totalSoldValueCredit;
     const totalAvailable = totalInitial - totalSold;
 
+
     // Guardar en la base de datos
     try {
       console.log('Intentando guardar turno para usuario:', user.id);
@@ -337,10 +338,34 @@ const Index = () => {
         return;
       }
 
-      console.log('✅ Turno guardado correctamente:', insertData);
+      // ACTUALIZAR INVENTARIO: descontar productos vendidos
+      for (const product of productsData) {
+        const totalSoldProduct = (product.soldCash || 0) + (product.soldCredit || 0);
+        if (totalSoldProduct > 0) {
+          // Obtener producto actual para saber el inventario actual
+          const { data: prodData, error: prodError } = await (supabase as any)
+            .from('products')
+            .select('quantity')
+            .eq('id', product.productId)
+            .single();
+          if (!prodError && prodData) {
+            const newQuantity = Math.max(0, (prodData.quantity || 0) - totalSoldProduct);
+            const { error: updateError } = await (supabase as any)
+              .from('products')
+              .update({ quantity: newQuantity })
+              .eq('id', product.productId);
+            if (updateError) {
+              console.error(`Error actualizando inventario para producto ${product.productName}:`, updateError);
+            }
+          } else {
+            console.error(`Error obteniendo inventario actual para producto ${product.productName}:`, prodError);
+          }
+        }
+      }
+
       toast({
         title: "Turno finalizado",
-        description: "El resumen del turno ha sido guardado correctamente en la base de datos.",
+        description: "El resumen del turno ha sido guardado y el inventario actualizado correctamente.",
       });
     } catch (error: any) {
       console.error('❌ Excepción al guardar turno:', error);
